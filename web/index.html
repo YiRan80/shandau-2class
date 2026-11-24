@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第二课堂抢课辅助程序</title>
+<link rel="stylesheet" href="/style.css?v=1.0.6">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>第二课堂抢课辅助程序
+        <span class="ver" id="appVer" title="程序版本（可用 版本管理.py 回档）">v1.0.6</span>
+      </h1>
+      <p class="sub">本地运行 · 单账号 · 合规护栏内置 · 入口自动发现</p>
+    </div>
+    <div class="state-box">
+      <span class="dot" id="stateDot"></span>
+      <span id="stateText">未启动</span>
+    </div>
+  </header>
+
+  <div class="notice">
+    <span class="notice-icon">!</span>
+    <div>
+      请遵守学校规定与平台使用条款，仅使用本人账号。本程序遇到验证码会暂停等待人工处理，
+      不破解、不伪造请求；轮询间隔设有下限，避免影响系统稳定。最后一击由程序在合规窗口内自动完成，
+      你可以随时停止。
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- 左列：配置 -->
+    <section class="card">
+      <h2>配置</h2>
+
+      <div class="group">
+        <h3><span class="gn">1</span>登录信息</h3>
+        <label for="username">学号 / 账号</label>
+        <input id="username" placeholder="留空则沿用上次配置">
+        <label for="password">密码</label>
+        <input id="password" type="password" placeholder="仅保存在本机，界面脱敏显示">
+        <label for="anchor_url">校园门户锚点（稳定地址，入口自动发现）</label>
+        <input id="anchor_url" placeholder="https://校园门户域名/...">
+        <p class="hint">填一次并保存即可：程序启动后会自动填入并提交登录，只有出现验证码时才需要你手动处理（验证码不识别）。</p>
+        <p class="hint">锚点只需填校园统一门户地址；抢课入口由程序自动发现，无需填写易变的具体网址。</p>
+      </div>
+
+      <div class="group">
+        <h3><span class="gn">2</span>运行模式</h3>
+        <div class="seg" id="modeSeg" role="radiogroup" aria-label="运行模式">
+          <label class="seg-item">
+            <input type="radio" name="mode" value="scheduled" checked>
+            <span>定时<small>已知放课时间</small></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3><span class="gn">3</span>目标课程筛选</h3>
+        <label for="campus">校区</label>
+        <select id="campus">
+          <option value="">全部校区</option>
+          <option value="金海">金海校区（浦东金海路）</option>
+          <option value="嘉善">嘉善校区（浙江嘉善）</option>
+          <option value="金桥">金桥校区（浦东金桥路）</option>
+          <option value="长寿">长寿路校区（普陀长寿路）</option>
+        </select>
+        <div class="row">
+          <div>
+            <label for="category">五育类别</label>
+            <select id="category"><option value="">全部</option><option>德育</option><option>智育</option><option>体育</option><option>美育</option><option>劳育</option></select>
+          </div>
+          <div>
+            <label for="level">层级</label>
+            <select id="level"><option value="">全部</option><option>校级</option><option>院级</option></select>
+          </div>
+        </div>
+        <label for="keywords">名称关键词（每行一个，留空表示全部）</label>
+        <textarea id="keywords" rows="3" placeholder="例如：&#10;羽毛球&#10;志愿"></textarea>
+        <div class="filter-apply">
+          <button type="button" id="applyFilterBtn" class="btn ghost">确认并刷新课程</button>
+          <span id="filterHint" class="hint">改完筛选后点这里，右侧「课程与余量」会按新条件重新抓取</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3><span class="gn">4</span>放课时间（定时模式）</h3>
+        <label for="release_time">放课时刻</label>
+        <input id="release_time" type="datetime-local" step="60">
+        <div class="chips" id="rtChips">
+          <button type="button" class="chip" data-rt="today-12">今天 12:00</button>
+          <button type="button" class="chip" data-rt="today-20">今天 20:00</button>
+          <button type="button" class="chip" data-rt="tmr-12">明天 12:00</button>
+          <button type="button" class="chip" data-rt="tmr-20">明天 20:00</button>
+          <button type="button" class="chip ghost" data-rt="clear">清除</button>
+        </div>
+        <div class="row">
+          <div><label for="lead_minutes">提前启动(分钟)</label><input id="lead_minutes" type="number" min="0" step="1"></div>
+          <div><label for="lead_seconds">高频提前(秒)</label><input id="lead_seconds" type="number" min="0" step="5"></div>
+          <div><label for="window_seconds">窗口(秒)</label><input id="window_seconds" type="number" min="0" step="10"></div>
+        </div>
+        <div class="timeline" id="rtTimeline" aria-hidden="true"></div>
+        <p class="hint" id="rtHint">提前量用于预留打开页面、登录与就绪确认的时间（默认 10 分钟）。</p>
+      </div>
+
+      <div class="group">
+        <details class="adv" id="advStrategy">
+          <summary><h3 class="inline"><span class="gn">5</span>抢课策略（高级）</h3></summary>
+          <div class="row">
+            <div><label for="poll_interval_normal">平时轮询(秒)</label><input id="poll_interval_normal" type="number" step="0.5"></div>
+            <div><label for="poll_interval_burst">窗口轮询(秒)</label><input id="poll_interval_burst" type="number" step="0.5"></div>
+          </div>
+          <div class="row">
+            <div><label for="max_retries">最大重试</label><input id="max_retries" type="number"></div>
+            <div><label for="retry_backoff">退避基数(秒)</label><input id="retry_backoff" type="number" step="0.5"></div>
+          </div>
+          <div class="row">
+            <div><label for="max_courses">最多提交数</label><input id="max_courses" type="number"></div>
+          </div>
+          <p class="hint">间隔下限：平时 ≥3 秒，窗口内 ≥1 秒（程序自动夹紧，防止高频刷接口）。</p>
+        </details>
+      </div>
+
+      <button id="saveBtn" class="btn primary wide">保存配置</button>
+      <div class="config-tools">
+        <button id="exportBtn" class="btn ghost sm">导出配置备份</button>
+        <button id="importBtn" class="btn ghost sm">导入配置</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="hint">备份文件含账号密码，请妥善保管，不要外传。</p>
+    </section>
+
+    <!-- 右列：状态与课程 -->
+    <div class="col">
+      <section class="card">
+        <h2>控制</h2>
+        <div class="controls">
+          <button id="startBtn" class="btn primary">启动抢课</button>
+          <button id="stopBtn" class="btn danger" disabled>停止</button>
+          <button id="resolveBtn" class="btn warn" disabled>我已处理，继续</button>
+          <button id="rediscoverBtn" class="btn ghost sm">重新发现入口</button>
+        </div>
+        <div id="loginBox" class="login-box idle">
+          <span class="login-dot" id="loginDot"></span>
+          <div>
+            <div class="login-label"><span id="loginCode">未启动</span></div>
+            <div class="login-detail" id="loginDetail">点击启动抢课后自动检测</div>
+          </div>
+        </div>
+        <div class="run-meta" id="runMeta"></div>
+        <div id="dueBanner" class="due-banner hidden" aria-live="polite"></div>
+        <div class="stats" id="stats"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>课程与余量</h2>
+          <span class="tag-note" id="courseScope">只显示官网「能报的二课」</span>
+        </div>
+        <div class="course-tools">
+          <p class="hint sel-hint" id="selHint">未选择目标课程：点击课程卡片挑选，再点「确认选课」；未确认时程序只刷新、不会自动报名</p>
+          <div class="course-tools-right">
+            <label class="chk"><input type="checkbox" id="wait_reg_start" checked><span>按报名开始时间到点抢</span></label>
+            <button id="clearSelBtn" class="btn ghost sm">清空选择</button>
+            <button id="confirmSelBtn" class="btn primary sm" disabled>确认选课</button>
+            <span id="selPendingTag" class="tag-note hidden"></span>
+          </div>
+        </div>
+        <div id="courseList" class="course-list"><p class="empty-state">启动后将展示能报的二课</p></div>
+      </section>
+
+      <section class="card">
+        <h2>操作日志</h2>
+        <div id="logList" class="log-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <p>第二课堂抢课辅助程序 · 本地单机运行，数据仅存本机 · 请合理使用，遵守学校相关规定</p>
+  </footer>
+</div>
+<div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+<script src="/app.js?v=1.0.6"></script>
+</body>
+</html>
+
+

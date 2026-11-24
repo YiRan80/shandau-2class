@@ -1,0 +1,23 @@
+# 运行数据：含账号配置、登录痕迹、抓到的课程与报名记录，永不入库
+data/
+logs/
+data_test/
+versions/
+dist/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 一次性诊断脚本与截图
+_diag_*
+_dryrun_*
+_ui_*.png
+*.bak
+*.log
+*.pid
+
+# 编辑器
+.vscode/
+.idea/
